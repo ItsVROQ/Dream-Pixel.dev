@@ -1,29 +1,26 @@
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { withAuth } from '@/lib/auth/middleware'
 
 export async function middleware(request: NextRequest) {
   const { pathname } = new URL(request.url)
 
-  // Define protected routes
-  const protectedRoutes = [
-    '/api/generations',
-    '/api/seeds',
-    '/api/subscription',
-    '/api/profile',
-    '/api/user',
-  ]
+  const protectedRoutes = ['/api/generations', '/api/seeds', '/api/subscription', '/api/profile', '/api/user']
 
-  // Check if the current path is a protected route
-  const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route))
+  const isProtectedRoute = protectedRoutes.some((route) => pathname.startsWith(route))
 
-  if (isProtectedRoute) {
-    return withAuth(request, undefined, {
-      requireEmailVerification: true
-    })
+  if (!isProtectedRoute) {
+    return NextResponse.next()
   }
 
-  // Allow the request to continue
-  return
+  const authResult = await withAuth(request, undefined, {
+    requireEmailVerification: true,
+  })
+
+  if (authResult instanceof NextResponse) {
+    return authResult
+  }
+
+  return NextResponse.next()
 }
 
 export const config = {

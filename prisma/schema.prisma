@@ -66,6 +66,7 @@ model User {
   generations  Generation[]
   seeds        Seed[]        @relation("SeedCreator")
   subscription Subscription?
+  invoices     Invoice[]
 
   @@index([createdAt], map: "users_created_at_idx")
   @@index([email], map: "users_email_idx")
@@ -120,15 +121,51 @@ model Subscription {
   userId               String             @unique @map("user_id")
   stripeCustomerId     String?            @unique @map("stripe_customer_id")
   stripeSubscriptionId String?            @unique @map("stripe_subscription_id")
+  stripePriceId        String?            @map("stripe_price_id")
+  billingPeriod        String?            @map("billing_period")
   status               SubscriptionStatus @default(INACTIVE)
   currentPeriodStart   DateTime?          @map("current_period_start")
   currentPeriodEnd     DateTime?          @map("current_period_end")
+  cancelAt             DateTime?          @map("cancel_at")
   cancelAtPeriodEnd    Boolean            @default(false) @map("cancel_at_period_end")
+  generationLimit      Int?               @map("generation_limit")
+  usageWarningSentAt   DateTime?          @map("usage_warning_sent_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([status], map: "subscriptions_status_idx")
   @@map("subscriptions")
+}
+
+model Invoice {
+  id                   String   @id @default(cuid())
+  userId               String   @map("user_id")
+  stripeInvoiceId      String   @unique @map("stripe_invoice_id")
+  stripeCustomerId     String?  @map("stripe_customer_id")
+  stripeSubscriptionId String?  @map("stripe_subscription_id")
+  number               String?
+  status               String?
+  amountPaid           Int      @default(0) @map("amount_paid")
+  currency             String   @default("usd")
+  hostedInvoiceUrl     String?  @map("hosted_invoice_url")
+  pdfUrl               String?  @map("pdf_url")
+  s3Key                String?  @map("s3_key")
+  createdAt            DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "invoices_user_id_idx")
+  @@map("invoices")
+}
+
+model StripeEvent {
+  id              String   @id @map("id")
+  type            String
+  stripeCreatedAt DateTime? @map("stripe_created_at")
+  processedAt     DateTime @default(now()) @map("processed_at")
+
+  @@index([type], map: "stripe_events_type_idx")
+  @@map("stripe_events")
 }
 
 // NextAuth.js models

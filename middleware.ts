@@ -1,8 +1,15 @@
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { withAuth } from '@/lib/auth/middleware'
+import { withAdmin } from '@/lib/auth/adminMiddleware'
 
 export async function middleware(request: NextRequest) {
   const { pathname } = new URL(request.url)
+
+  // Define admin routes (both UI and API)
+  const adminRoutes = [
+    '/admin',
+    '/api/admin'
+  ]
 
   // Define protected routes
   const protectedRoutes = [
@@ -15,6 +22,18 @@ export async function middleware(request: NextRequest) {
     '/api/webhooks',
   ]
 
+  // Check if the current path is an admin route
+  const isAdminRoute = adminRoutes.some(route => pathname.startsWith(route))
+
+  if (isAdminRoute) {
+    const result = await withAdmin(request)
+    if (result instanceof NextResponse) {
+      return result
+    }
+    // Admin is authenticated, continue
+    return
+  }
+
   // Check if the current path is a protected route
   const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route))
 
@@ -22,10 +41,23 @@ export async function middleware(request: NextRequest) {
     return withAuth(request, undefined, {
       requireEmailVerification: true
     })
+  const protectedRoutes = ['/api/generations', '/api/seeds', '/api/subscription', '/api/profile', '/api/user']
+
+  const isProtectedRoute = protectedRoutes.some((route) => pathname.startsWith(route))
+
+  if (!isProtectedRoute) {
+    return NextResponse.next()
   }
 
-  // Allow the request to continue
-  return
+  const authResult = await withAuth(request, undefined, {
+    requireEmailVerification: true,
+  })
+
+  if (authResult instanceof NextResponse) {
+    return authResult
+  }
+
+  return NextResponse.next()
 }
 
 export const config = {

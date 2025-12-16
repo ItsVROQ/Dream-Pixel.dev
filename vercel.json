@@ -1,0 +1,46 @@
+{
+  "version": 2,
+  "buildCommand": "npm run build",
+  "installCommand": "npm install",
+  "framework": "nextjs",
+  "public": false,
+  "regions": ["sfo1", "iad1", "lhr1", "nrt1"],
+  "functions": {
+    "app/api/**/*.ts": {
+      "runtime": "nodejs18.x",
+      "memory": 1024,
+      "maxDuration": 30
+    }
+  },
+  "env": [
+    "NODE_ENV",
+    "APP_ENV",
+    "DATABASE_URL",
+    "NEXTAUTH_URL",
+    "NEXTAUTH_SECRET",
+    "JWT_SECRET",
+    "SENTRY_DSN",
+    "NEXT_PUBLIC_SENTRY_DSN",
+    "STRIPE_SECRET_KEY",
+    "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY",
+    "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY",
+    "AWS_REGION",
+    "S3_BUCKET_NAME",
+    "UPSTASH_REDIS_REST_URL",
+    "UPSTASH_REDIS_REST_TOKEN"
+  ],
+  "redirects": [
+    {
+      "source": "/api/docs",
+      "destination": "/api",
+      "permanent": false
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/monitoring/:path*",
+      "destination": "https://[sentry-hostname].ingest.sentry.io/:path*"
+    }
+  ]
+}

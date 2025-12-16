@@ -1,13 +1,17 @@
 # dependencies
-node_modules
+node_modules/
+package-lock.json.lock
 
 # next.js
 .next/
 out/
+*.tsbuildinfo
 
 # env files
 .env
-.env.*
+.env.local
+.env.*.local
+.env.*.example
 !.env.example
 
 # logs
@@ -15,11 +19,70 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+lerna-debug.log*
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# testing
+coverage/
+.nyc_output/
+*.lcov
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+
+# production
+build/
+dist/
+.next/
+out/
 
 # misc
-.DS_Store
-*.tsbuildinfo
+.cache/
+.parcel-cache
+.turbo/
 
 # prisma
 prisma/dev.db
 prisma/dev.db-journal
+
+# lighthouse
+lhr.json
+.lighthouseci/
+
+# sentry
+.sentry-release
+
+# vercel
+.vercel
+.vercel-artifacts
+
+# environment-specific
+.env.production
+.env.staging
+.env.development
+
+# local development
+.local/
+tmp/
+temp/
+
+# bundle analysis
+.next/analyze/

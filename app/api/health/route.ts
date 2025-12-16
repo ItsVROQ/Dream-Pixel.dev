@@ -98,4 +98,6 @@ export async function GET(): Promise<NextResponse<HealthCheckResult>> {
     Sentry.captureException(error)
     return NextResponse.json(result, { status: 503 })
   }
+export async function GET() {
+  return NextResponse.json({ ok: true })
 }

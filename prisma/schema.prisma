@@ -38,6 +38,22 @@ enum SubscriptionStatus {
   INCOMPLETE
 }
 
+enum ImageType {
+  REFERENCE
+  GENERATION
+  THUMBNAIL
+  MEDIUM
+  FULL
+}
+
+enum ImageStatus {
+  UPLOADED
+  PROCESSING
+  PROCESSED
+  FAILED
+  DELETED
+}
+
 model User {
   id                String   @id @default(cuid())
   email             String   @unique
@@ -64,6 +80,7 @@ model User {
   updatedAt         DateTime @updatedAt @map("updated_at")
 
   generations  Generation[]
+  images       Image[]
   seeds        Seed[]        @relation("SeedCreator")
   subscription Subscription?
 
@@ -72,26 +89,63 @@ model User {
   @@map("users")
 }
 
+model Image {
+  id             String      @id @default(cuid())
+  userId         String      @map("user_id")
+  type           ImageType   @map("image_type")
+  status         ImageStatus @default(UPLOADED)
+  originalName   String      @map("original_name")
+  originalSize   Int         @map("original_size")
+  originalWidth  Int         @map("original_width")
+  originalHeight Int         @map("original_height")
+  s3Key          String      @map("s3_key")
+  s3Bucket       String      @map("s3_bucket")
+  url            String
+  thumbnailUrl   String?     @map("thumbnail_url")
+  mediumUrl      String?     @map("medium_url")
+  fullUrl        String?     @map("full_url")
+  hash           String?     @unique
+  metadata       Json?
+  expiryDate     DateTime?   @map("expiry_date")
+  createdAt      DateTime    @default(now()) @map("created_at")
+  updatedAt      DateTime    @updatedAt @map("updated_at")
+
+  user                User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  generations        Generation[] @relation("GenerationReferenceImage")
+  resultGenerations  Generation[] @relation("GenerationResultImage")
+
+  @@index([userId], map: "images_user_id_idx")
+  @@index([type], map: "images_type_idx")
+  @@index([status], map: "images_status_idx")
+  @@index([createdAt], map: "images_created_at_idx")
+  @@index([expiryDate], map: "images_expiry_date_idx")
+  @@map("images")
+}
+
 model Generation {
   id                String           @id @default(cuid())
   userId            String           @map("user_id")
   prompt            String
   negativePrompt    String?          @map("negative_prompt")
   seed              Int?
-  referenceImageUrl String?          @map("reference_image_url")
-  resultImageUrl    String?          @map("result_image_url")
+  referenceImageId  String?          @map("reference_image_id")
+  referenceImageUrl String?          @map("reference_image_url") @db.Text
+  resultImageId     String?          @map("result_image_id")
   settings          Json
   status            GenerationStatus @default(PENDING)
   errorMessage      String?          @map("error_message")
   processingTimeMs  Int?             @map("processing_time_ms")
   createdAt         DateTime         @default(now()) @map("created_at")
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  referenceImage  Image?          @relation("GenerationReferenceImage", fields: [referenceImageId], references: [id])
+  resultImage     Image?          @relation("GenerationResultImage", fields: [resultImageId], references: [id])
 
   @@index([userId], map: "generations_user_id_idx")
   @@index([seed], map: "generations_seed_idx")
   @@index([createdAt], map: "generations_created_at_idx")
   @@index([status], map: "generations_status_idx")
+  @@index([referenceImageId], map: "generations_reference_image_id_idx")
   @@map("generations")
 }
 

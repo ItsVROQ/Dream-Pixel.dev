@@ -13,6 +13,16 @@ enum UserTier {
   ENTERPRISE
 }
 
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+}
+
 enum GenerationStatus {
   PENDING
   PROCESSING
@@ -39,14 +49,17 @@ enum SubscriptionStatus {
 }
 
 model User {
-  id                String   @id @default(cuid())
-  email             String   @unique
+  id                String     @id @default(cuid())
+  email             String     @unique
   name              String?
-  passwordHash      String?  @map("password_hash")
-  profilePictureUrl String?  @map("profile_picture_url")
-  tier              UserTier @default(FREE)
-  apiKey            String?  @unique @map("api_key")
-  creditsRemaining  Int      @default(0) @map("credits_remaining")
+  passwordHash      String?    @map("password_hash")
+  profilePictureUrl String?    @map("profile_picture_url")
+  tier              UserTier   @default(FREE)
+  role              UserRole   @default(USER)
+  status            UserStatus @default(ACTIVE)
+  apiKey            String?    @unique @map("api_key")
+  creditsRemaining  Int        @default(0) @map("credits_remaining")
+  lastActiveAt      DateTime?  @map("last_active_at")
   
   // Authentication fields
   emailVerified     DateTime? @map("email_verified")
@@ -106,6 +119,8 @@ model Seed {
   useCount      Int          @default(0) @map("use_count")
   likeCount     Int          @default(0) @map("like_count")
   isFeatured    Boolean      @default(false) @map("is_featured")
+  isApproved    Boolean      @default(false) @map("is_approved")
+  isBanned      Boolean      @default(false) @map("is_banned")
   createdAt     DateTime     @default(now()) @map("created_at")
 
   creator User @relation("SeedCreator", fields: [creatorId], references: [id], onDelete: Cascade)
@@ -171,4 +186,19 @@ model VerificationToken {
 
   @@unique([identifier, token])
   @@map("verification_tokens")
+}
+
+model ErrorLog {
+  id        String   @id @default(cuid())
+  level     String   // ERROR, WARN, INFO
+  message   String
+  stack     String?
+  metadata  Json?
+  userId    String?  @map("user_id")
+  endpoint  String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt], map: "error_logs_created_at_idx")
+  @@index([level], map: "error_logs_level_idx")
+  @@map("error_logs")
 }

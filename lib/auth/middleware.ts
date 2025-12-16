@@ -45,9 +45,10 @@ export async function withAuth(
       )
     }
 
-    // Get fresh user data
-    const user = await prisma.user.findUnique({
+    // Get fresh user data and update last active time
+    const user = await prisma.user.update({
       where: { id: payload.userId },
+      data: { lastActiveAt: new Date() },
       select: {
         id: true,
         email: true,

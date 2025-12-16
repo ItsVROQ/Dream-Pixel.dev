@@ -135,7 +135,13 @@ model Generation {
   status            GenerationStatus @default(PENDING)
   errorMessage      String?          @map("error_message")
   processingTimeMs  Int?             @map("processing_time_ms")
+  provider          String?          @default("gemini")
+  jobId             String?          @map("job_id")
+  retryCount        Int              @default(0) @map("retry_count")
+  lastRetryAt       DateTime?        @map("last_retry_at")
+  completedAt       DateTime?        @map("completed_at")
   createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
 
   user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   referenceImage  Image?          @relation("GenerationReferenceImage", fields: [referenceImageId], references: [id])
@@ -145,6 +151,7 @@ model Generation {
   @@index([seed], map: "generations_seed_idx")
   @@index([createdAt], map: "generations_created_at_idx")
   @@index([status], map: "generations_status_idx")
+  @@index([jobId], map: "generations_job_id_idx")
   @@index([referenceImageId], map: "generations_reference_image_id_idx")
   @@map("generations")
 }

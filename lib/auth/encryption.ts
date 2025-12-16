@@ -37,12 +37,17 @@ export function decrypt(encryptedData: EncryptedData): string {
   return decrypted
 }
 
-export function generateApiKey(): string {
-  const prefix = 'dp_' // Dream Pixel prefix
-  const randomBytes = crypto.randomBytes(32).toString('hex')
+export function generateApiKey(type: 'live' | 'test' = 'live'): string {
+  const prefix = type === 'live' ? 'sk_live_' : 'sk_test_'
+  const randomBytes = crypto.randomBytes(24).toString('hex') // 48 chars
   return `${prefix}${randomBytes}`
 }
 
+export function hashApiKey(apiKey: string): string {
+  return crypto.createHash('sha256').update(apiKey).digest('hex')
+}
+
+// Keep existing functions for backward compatibility or other uses
 export function encryptApiKey(apiKey: string): EncryptedData {
   return encrypt(apiKey)
 }

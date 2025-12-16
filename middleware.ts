@@ -11,6 +11,8 @@ export async function middleware(request: NextRequest) {
     '/api/subscription',
     '/api/profile',
     '/api/user',
+    '/api/keys',
+    '/api/webhooks',
   ]
 
   // Check if the current path is a protected route

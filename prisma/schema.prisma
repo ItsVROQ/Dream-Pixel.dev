@@ -48,6 +48,22 @@ enum SubscriptionStatus {
   INCOMPLETE
 }
 
+enum ImageType {
+  REFERENCE
+  GENERATION
+  THUMBNAIL
+  MEDIUM
+  FULL
+}
+
+enum ImageStatus {
+  UPLOADED
+  PROCESSING
+  PROCESSED
+  FAILED
+  DELETED
+}
+
 model User {
   id                String     @id @default(cuid())
   email             String     @unique
@@ -77,12 +93,47 @@ model User {
   updatedAt         DateTime @updatedAt @map("updated_at")
 
   generations  Generation[]
+  images       Image[]
   seeds        Seed[]        @relation("SeedCreator")
   subscription Subscription?
+  invoices     Invoice[]
 
   @@index([createdAt], map: "users_created_at_idx")
   @@index([email], map: "users_email_idx")
   @@map("users")
+}
+
+model Image {
+  id             String      @id @default(cuid())
+  userId         String      @map("user_id")
+  type           ImageType   @map("image_type")
+  status         ImageStatus @default(UPLOADED)
+  originalName   String      @map("original_name")
+  originalSize   Int         @map("original_size")
+  originalWidth  Int         @map("original_width")
+  originalHeight Int         @map("original_height")
+  s3Key          String      @map("s3_key")
+  s3Bucket       String      @map("s3_bucket")
+  url            String
+  thumbnailUrl   String?     @map("thumbnail_url")
+  mediumUrl      String?     @map("medium_url")
+  fullUrl        String?     @map("full_url")
+  hash           String?     @unique
+  metadata       Json?
+  expiryDate     DateTime?   @map("expiry_date")
+  createdAt      DateTime    @default(now()) @map("created_at")
+  updatedAt      DateTime    @updatedAt @map("updated_at")
+
+  user                User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  generations        Generation[] @relation("GenerationReferenceImage")
+  resultGenerations  Generation[] @relation("GenerationResultImage")
+
+  @@index([userId], map: "images_user_id_idx")
+  @@index([type], map: "images_type_idx")
+  @@index([status], map: "images_status_idx")
+  @@index([createdAt], map: "images_created_at_idx")
+  @@index([expiryDate], map: "images_expiry_date_idx")
+  @@map("images")
 }
 
 model Generation {
@@ -91,20 +142,31 @@ model Generation {
   prompt            String
   negativePrompt    String?          @map("negative_prompt")
   seed              Int?
-  referenceImageUrl String?          @map("reference_image_url")
-  resultImageUrl    String?          @map("result_image_url")
+  referenceImageId  String?          @map("reference_image_id")
+  referenceImageUrl String?          @map("reference_image_url") @db.Text
+  resultImageId     String?          @map("result_image_id")
   settings          Json
   status            GenerationStatus @default(PENDING)
   errorMessage      String?          @map("error_message")
   processingTimeMs  Int?             @map("processing_time_ms")
+  provider          String?          @default("gemini")
+  jobId             String?          @map("job_id")
+  retryCount        Int              @default(0) @map("retry_count")
+  lastRetryAt       DateTime?        @map("last_retry_at")
+  completedAt       DateTime?        @map("completed_at")
   createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  referenceImage  Image?          @relation("GenerationReferenceImage", fields: [referenceImageId], references: [id])
+  resultImage     Image?          @relation("GenerationResultImage", fields: [resultImageId], references: [id])
 
   @@index([userId], map: "generations_user_id_idx")
   @@index([seed], map: "generations_seed_idx")
   @@index([createdAt], map: "generations_created_at_idx")
   @@index([status], map: "generations_status_idx")
+  @@index([jobId], map: "generations_job_id_idx")
+  @@index([referenceImageId], map: "generations_reference_image_id_idx")
   @@map("generations")
 }
 
@@ -135,15 +197,51 @@ model Subscription {
   userId               String             @unique @map("user_id")
   stripeCustomerId     String?            @unique @map("stripe_customer_id")
   stripeSubscriptionId String?            @unique @map("stripe_subscription_id")
+  stripePriceId        String?            @map("stripe_price_id")
+  billingPeriod        String?            @map("billing_period")
   status               SubscriptionStatus @default(INACTIVE)
   currentPeriodStart   DateTime?          @map("current_period_start")
   currentPeriodEnd     DateTime?          @map("current_period_end")
+  cancelAt             DateTime?          @map("cancel_at")
   cancelAtPeriodEnd    Boolean            @default(false) @map("cancel_at_period_end")
+  generationLimit      Int?               @map("generation_limit")
+  usageWarningSentAt   DateTime?          @map("usage_warning_sent_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([status], map: "subscriptions_status_idx")
   @@map("subscriptions")
+}
+
+model Invoice {
+  id                   String   @id @default(cuid())
+  userId               String   @map("user_id")
+  stripeInvoiceId      String   @unique @map("stripe_invoice_id")
+  stripeCustomerId     String?  @map("stripe_customer_id")
+  stripeSubscriptionId String?  @map("stripe_subscription_id")
+  number               String?
+  status               String?
+  amountPaid           Int      @default(0) @map("amount_paid")
+  currency             String   @default("usd")
+  hostedInvoiceUrl     String?  @map("hosted_invoice_url")
+  pdfUrl               String?  @map("pdf_url")
+  s3Key                String?  @map("s3_key")
+  createdAt            DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "invoices_user_id_idx")
+  @@map("invoices")
+}
+
+model StripeEvent {
+  id              String   @id @map("id")
+  type            String
+  stripeCreatedAt DateTime? @map("stripe_created_at")
+  processedAt     DateTime @default(now()) @map("processed_at")
+
+  @@index([type], map: "stripe_events_type_idx")
+  @@map("stripe_events")
 }
 
 // NextAuth.js models

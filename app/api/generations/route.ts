@@ -1,17 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { withAuth } from '@/lib/auth/middleware'
 import { prisma } from '@/lib/prisma'
+import { inngest } from '@/lib/inngest/client'
+import { validateGenerationRequest, calculateRequiredCredits, getEstimatedProcessingTime } from '@/lib/generation/utils'
+import { checkGenerationRateLimit } from '@/lib/generation/rateLimit'
 import { z } from 'zod'
-
-const generateImageSchema = z.object({
-  prompt: z.string().min(1, 'Prompt is required').max(500, 'Prompt too long'),
-  negativePrompt: z.string().optional(),
-  settings: z.object({
-    quality: z.enum(['standard', 'high']).default('standard'),
-    style: z.string().optional(),
-    aspectRatio: z.string().optional(),
-  }).default({}),
-})
 
 export async function POST(request: NextRequest) {
   try {
@@ -26,38 +19,70 @@ export async function POST(request: NextRequest) {
     }
 
     const authenticatedRequest = authResponse as typeof request & { user: any }
-    
-    const body = await request.json()
-    const { prompt, negativePrompt, settings } = generateImageSchema.parse(body)
     const user = authenticatedRequest.user
 
-    // Check if user has credits
-    if (user.creditsRemaining <= 0) {
+    // Parse and validate request body
+    const body = await request.json()
+    const generationRequest = validateGenerationRequest(body)
+
+    // Check rate limit
+    const rateLimit = await checkGenerationRateLimit(user.userId, user.tier)
+    if (!rateLimit.allowed) {
       return NextResponse.json(
-        { error: 'Insufficient credits. Please upgrade your plan or wait for credit refresh.' },
+        {
+          error: `Rate limit exceeded for your tier (${user.tier}). Reset at ${rateLimit.resetTime.toISOString()}`,
+          remaining: rateLimit.remaining,
+          resetTime: rateLimit.resetTime
+        },
+        { status: 429 }
+      )
+    }
+
+    // Calculate required credits
+    const requiredCredits = calculateRequiredCredits(user.tier, generationRequest.settings)
+
+    // Check if user has sufficient credits
+    if (user.creditsRemaining < requiredCredits) {
+      return NextResponse.json(
+        {
+          error: `Insufficient credits. Required: ${requiredCredits}, Available: ${user.creditsRemaining}`,
+          creditsRequired: requiredCredits,
+          creditsAvailable: user.creditsRemaining
+        },
         { status: 402 }
       )
     }
 
-    // Check feature access based on user tier
-    const requiredCredits = settings.quality === 'high' ? 2 : 1
-    const feature = settings.quality === 'high' ? 'high_quality' : 'basic_generation'
-
-    // This would be replaced with actual image generation logic
-    // For now, we'll simulate the process
-    
     // Create generation record
     const generation = await prisma.generation.create({
       data: {
         userId: user.userId,
-        prompt,
-        negativePrompt,
-        settings,
+        prompt: generationRequest.prompt,
+        negativePrompt: generationRequest.negativePrompt,
+        seed: generationRequest.seed,
+        referenceImageUrl: generationRequest.referenceImageUrl,
+        settings: generationRequest.settings,
+        provider: generationRequest.provider || process.env.AI_PROVIDER || 'gemini',
         status: 'PENDING',
       }
     })
 
-    // Deduct credits
+    // Queue background job with Inngest
+    const jobResult = await inngest.send({
+      name: 'generation/image.create',
+      data: {
+        generationId: generation.id,
+        userId: user.userId,
+        prompt: generationRequest.prompt,
+        negativePrompt: generationRequest.negativePrompt,
+        seed: generationRequest.seed,
+        referenceImageUrl: generationRequest.referenceImageUrl,
+        settings: generationRequest.settings,
+        providerName: generationRequest.provider || process.env.AI_PROVIDER || 'gemini'
+      }
+    })
+
+    // Decrement credits immediately (optimistic deduction)
     await prisma.user.update({
       where: { id: user.userId },
       data: {
@@ -67,27 +92,30 @@ export async function POST(request: NextRequest) {
       }
     })
 
-    // Simulate async generation process (in real implementation, this would be a queue)
-    // For demo purposes, we'll immediately return a "processing" status
-    
+    const estimatedTime = getEstimatedProcessingTime(generationRequest.settings)
+
     return NextResponse.json({
-      message: 'Generation started',
-      generation: {
-        id: generation.id,
-        status: generation.status,
-        prompt: generation.prompt,
-        estimatedTime: settings.quality === 'high' ? '30-60 seconds' : '10-30 seconds',
-        creditsUsed: requiredCredits,
-        creditsRemaining: user.creditsRemaining - requiredCredits,
-      }
-    }, { status: 201 })
+      jobId: generation.id,
+      status: generation.status,
+      prompt: generationRequest.prompt,
+      estimatedProcessingTime: estimatedTime,
+      creditsUsed: requiredCredits,
+      creditsRemaining: user.creditsRemaining - requiredCredits,
+      createdAt: generation.createdAt,
+    }, { status: 202 })
 
   } catch (error) {
     console.error('Generation error:', error)
-    
+
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: 'Invalid input', details: error.errors },
+        {
+          error: 'Invalid input',
+          details: error.errors.map(e => ({
+            path: e.path.join('.'),
+            message: e.message
+          }))
+        },
         { status: 400 }
       )
     }
@@ -117,19 +145,27 @@ export async function GET(request: NextRequest) {
     const generations = await prisma.generation.findMany({
       where: { userId: user.userId },
       orderBy: { createdAt: 'desc' },
-      take: 50, // Limit to recent 50 generations
+      take: 50,
       select: {
         id: true,
         prompt: true,
         status: true,
         resultImageUrl: true,
+        errorMessage: true,
         createdAt: true,
+        completedAt: true,
         processingTimeMs: true,
+        provider: true,
+        retryCount: true,
       }
     })
 
     return NextResponse.json({
       generations,
+      pagination: {
+        total: generations.length,
+        limit: 50
+      },
       user: {
         creditsRemaining: user.creditsRemaining,
         tier: user.tier,

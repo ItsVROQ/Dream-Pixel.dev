@@ -16,7 +16,7 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
       to: options.to,
       subject: options.subject,
       html: options.html,
-      text: options.text
+      text: options.text,
     })
     return true
   } catch (error) {
@@ -27,7 +27,7 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
 
 export function generateVerificationEmailHtml(token: string): string {
   const verificationUrl = `${process.env.NEXTAUTH_URL}/api/auth/verify-email?token=${token}`
-  
+
   return `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <h1 style="color: #333; text-align: center;">Verify Your Email</h1>
@@ -44,7 +44,7 @@ export function generateVerificationEmailHtml(token: string): string {
 
 export function generatePasswordResetEmailHtml(token: string): string {
   const resetUrl = `${process.env.NEXTAUTH_URL}/api/auth/reset-password?token=${token}`
-  
+
   return `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <h1 style="color: #333; text-align: center;">Reset Your Password</h1>
@@ -101,6 +101,53 @@ export function generateSubscriptionUpdateEmailHtml(tier: string): string {
         `}
       </ul>
       <p>Thank you for choosing Dream Pixel!</p>
+    </div>
+  `
+}
+
+export function generatePaymentReceiptEmailHtml(params: {
+  amountPaid: number
+  currency: string
+  invoiceNumber?: string | null
+  hostedInvoiceUrl?: string | null
+}): string {
+  return `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h1 style="color: #333; text-align: center;">Payment Received</h1>
+      <p>Thanks for your payment to Dream Pixel.</p>
+      <p><strong>Amount:</strong> ${(params.amountPaid / 100).toFixed(2)} ${params.currency.toUpperCase()}</p>
+      ${params.invoiceNumber ? `<p><strong>Invoice:</strong> ${params.invoiceNumber}</p>` : ''}
+      ${params.hostedInvoiceUrl ? `<p>You can view your invoice here: <a href="${params.hostedInvoiceUrl}">View Invoice</a></p>` : ''}
+      <p style="color: #666; font-size: 14px;">If you have any questions, reply to this email.</p>
+    </div>
+  `
+}
+
+export function generatePaymentFailedEmailHtml(params: {
+  invoiceNumber?: string | null
+  hostedInvoiceUrl?: string | null
+  nextPaymentAttempt?: Date | null
+}): string {
+  return `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h1 style="color: #333; text-align: center;">Payment Failed</h1>
+      <p>We were unable to process your latest payment for Dream Pixel.</p>
+      ${params.invoiceNumber ? `<p><strong>Invoice:</strong> ${params.invoiceNumber}</p>` : ''}
+      ${params.nextPaymentAttempt ? `<p>Stripe will retry the payment on <strong>${params.nextPaymentAttempt.toLocaleString()}</strong>.</p>` : ''}
+      ${params.hostedInvoiceUrl ? `<p>Please update your payment method here: <a href="${params.hostedInvoiceUrl}">View Invoice</a></p>` : ''}
+      <p>If you need help, reply to this email and we’ll assist you.</p>
+    </div>
+  `
+}
+
+export function generateUsageWarningEmailHtml(params: { used: number; limit: number }): string {
+  const percentage = Math.round((params.used / params.limit) * 100)
+
+  return `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h1 style="color: #333; text-align: center;">Usage Warning</h1>
+      <p>You’ve used <strong>${params.used}</strong> out of <strong>${params.limit}</strong> generations (${percentage}%).</p>
+      <p>If you need a higher limit, contact sales to adjust your Enterprise plan.</p>
     </div>
   `
 }

@@ -39,10 +39,23 @@ export async function middleware(request: NextRequest) {
     return withAuth(request, undefined, {
       requireEmailVerification: true
     })
+  const protectedRoutes = ['/api/generations', '/api/seeds', '/api/subscription', '/api/profile', '/api/user']
+
+  const isProtectedRoute = protectedRoutes.some((route) => pathname.startsWith(route))
+
+  if (!isProtectedRoute) {
+    return NextResponse.next()
   }
 
-  // Allow the request to continue
-  return
+  const authResult = await withAuth(request, undefined, {
+    requireEmailVerification: true,
+  })
+
+  if (authResult instanceof NextResponse) {
+    return authResult
+  }
+
+  return NextResponse.next()
 }
 
 export const config = {

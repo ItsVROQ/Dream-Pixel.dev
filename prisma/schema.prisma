@@ -1,0 +1,118 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserTier {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+enum GenerationStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
+}
+
+enum SeedCategory {
+  PORTRAIT
+  LANDSCAPE
+  ANIME
+  ABSTRACT
+  OTHER
+}
+
+enum SubscriptionStatus {
+  INACTIVE
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  UNPAID
+  INCOMPLETE
+}
+
+model User {
+  id                String   @id @default(cuid())
+  email             String   @unique
+  name              String?
+  passwordHash      String   @map("password_hash")
+  profilePictureUrl String?  @map("profile_picture_url")
+  tier              UserTier @default(FREE)
+  apiKey            String?  @unique @map("api_key")
+  creditsRemaining  Int      @default(0) @map("credits_remaining")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  generations  Generation[]
+  seeds        Seed[]        @relation("SeedCreator")
+  subscription Subscription?
+
+  @@index([createdAt], map: "users_created_at_idx")
+  @@map("users")
+}
+
+model Generation {
+  id                String           @id @default(cuid())
+  userId            String           @map("user_id")
+  prompt            String
+  negativePrompt    String?          @map("negative_prompt")
+  seed              Int?
+  referenceImageUrl String?          @map("reference_image_url")
+  resultImageUrl    String?          @map("result_image_url")
+  settings          Json
+  status            GenerationStatus @default(PENDING)
+  errorMessage      String?          @map("error_message")
+  processingTimeMs  Int?             @map("processing_time_ms")
+  createdAt         DateTime         @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "generations_user_id_idx")
+  @@index([seed], map: "generations_seed_idx")
+  @@index([createdAt], map: "generations_created_at_idx")
+  @@index([status], map: "generations_status_idx")
+  @@map("generations")
+}
+
+model Seed {
+  id            String       @id @default(cuid())
+  seedNumber    Int          @unique @map("seed_number")
+  creatorId     String       @map("creator_id")
+  title         String
+  description   String?
+  category      SeedCategory
+  exampleImages String[]     @map("example_images")
+  useCount      Int          @default(0) @map("use_count")
+  likeCount     Int          @default(0) @map("like_count")
+  isFeatured    Boolean      @default(false) @map("is_featured")
+  createdAt     DateTime     @default(now()) @map("created_at")
+
+  creator User @relation("SeedCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@index([creatorId], map: "seeds_creator_id_idx")
+  @@index([createdAt], map: "seeds_created_at_idx")
+  @@map("seeds")
+}
+
+model Subscription {
+  id                   String             @id @default(cuid())
+  userId               String             @unique @map("user_id")
+  stripeCustomerId     String?            @unique @map("stripe_customer_id")
+  stripeSubscriptionId String?            @unique @map("stripe_subscription_id")
+  status               SubscriptionStatus @default(INACTIVE)
+  currentPeriodStart   DateTime?          @map("current_period_start")
+  currentPeriodEnd     DateTime?          @map("current_period_end")
+  cancelAtPeriodEnd    Boolean            @default(false) @map("cancel_at_period_end")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status], map: "subscriptions_status_idx")
+  @@map("subscriptions")
+}
